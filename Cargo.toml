@@ -13,7 +13,7 @@ keywords = ["arm", "cortex-m", "stm32l0xx", "hal"]
 license = "0BSD"
 name = "stm32l0xx-hal"
 readme = "README.md"
-repository = "https://github.com/stm32-rs/stm32l0xx-hal"
+repository = "https://github.com/longfangsong/stm32l0xx-hal"
 version = "0.9.0"
 
 [package.metadata.docs.rs]
@@ -29,7 +29,7 @@ embedded-hal = { version = "0.2.3", features = ["unproven"] }
 embedded-time = "0.12.0"
 nb = "1.0.0"
 rtcc = { version = "0.2", optional = true }
-stm32l0 = "0.13.0"
+stm32l0 = "0.14.0"
 stm32-usbd = { version = "0.6.0", optional = true }
 void = { version = "1.0.2", default-features = false }
 
@@ -56,6 +56,7 @@ disable-linker-script = []
 
 # STM32L0 subfamilies
 # (Warning: Some peripherals, e.g. GPIO, don't follow this subfamily grouping.)
+stm32l0x0 = ["stm32l0/stm32l0x0"]
 stm32l0x1 = ["stm32l0/stm32l0x1"]
 stm32l0x2 = ["stm32l0/stm32l0x2"]
 stm32l0x3 = ["stm32l0/stm32l0x3"]

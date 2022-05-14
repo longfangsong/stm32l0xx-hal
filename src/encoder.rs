@@ -89,144 +89,146 @@ pub struct Encoder<T, PINS> {
     _pins: PhantomData<PINS>,
 }
 
-macro_rules! encoders {
-    ($($TIM:ident: ($sms:ty),)+) => {
-        $(
-            impl EncoderExt<$TIM> for $TIM {
-                fn encoder<PINS>(
-                    self,
-                    pins: PINS,
-                    mode: Mode,
-                    arr: u16,
-                    rcc: &mut Rcc,
-                ) -> Encoder<$TIM, PINS>
-                where
-                    PINS: Pins<$TIM>,
-                {
-                    Encoder::<$TIM, PINS>::new(self, pins, mode, arr, rcc)
-                }
-            }
-
-            impl<PINS> Encoder<$TIM, PINS>
+macro_rules! encoder {
+    ($TIM:ident: ($sms:ty)) => {
+        impl EncoderExt<$TIM> for $TIM {
+            fn encoder<PINS>(
+                self,
+                pins: PINS,
+                mode: Mode,
+                arr: u16,
+                rcc: &mut Rcc,
+            ) -> Encoder<$TIM, PINS>
             where
                 PINS: Pins<$TIM>,
             {
-                fn new(timer: $TIM, pins: PINS, mode: Mode, arr: u16, rcc: &mut Rcc) -> Self {
-                    // Enable peripheral, reset it
-                    <$TIM>::enable(rcc);
-                    <$TIM>::reset(rcc);
+                Encoder::<$TIM, PINS>::new(self, pins, mode, arr, rcc)
+            }
+        }
 
-                    // Disable the timer for configuration
-                    timer.cr1.write(|w| w.cen().clear_bit());
+        impl<PINS> Encoder<$TIM, PINS>
+        where
+            PINS: Pins<$TIM>,
+        {
+            fn new(timer: $TIM, pins: PINS, mode: Mode, arr: u16, rcc: &mut Rcc) -> Self {
+                // Enable peripheral, reset it
+                <$TIM>::enable(rcc);
+                <$TIM>::reset(rcc);
 
-                    // Configure encoder inputs.
-                    pins.into_alt_mode();
+                // Disable the timer for configuration
+                timer.cr1.write(|w| w.cen().clear_bit());
 
-                    // Encoder mode, count on all edges
-                    timer.smcr.write(|w| {
-                        w
-                            // Trigger source - TI1 edge detector
-                            .ts()
-                            .ti1f_ed()
-                            // Count edges on TI1, direction set by TI2
-                            .sms()
-                            .variant(match mode {
-                                Mode::CountTi1 => <$sms>::ENCODER_MODE_1,
-                                Mode::CountTi2 => <$sms>::ENCODER_MODE_2,
-                                Mode::Qei => <$sms>::ENCODER_MODE_3,
-                            })
-                    });
+                // Configure encoder inputs.
+                pins.into_alt_mode();
 
-                    timer.cr1.write(|w| {
-                        w
-                            // Only interrupt on over/underflow (as well as input pulses)
-                            .urs()
-                            .set_bit()
-                            // Enable timer
-                            .cen()
-                            .set_bit()
-                    });
+                // Encoder mode, count on all edges
+                timer.smcr.write(|w| {
+                    w
+                        // Trigger source - TI1 edge detector
+                        .ts()
+                        .ti1f_ed()
+                        // Count edges on TI1, direction set by TI2
+                        .sms()
+                        .variant(match mode {
+                            Mode::CountTi1 => <$sms>::ENCODER_MODE_1,
+                            Mode::CountTi2 => <$sms>::ENCODER_MODE_2,
+                            Mode::Qei => <$sms>::ENCODER_MODE_3,
+                        })
+                });
 
-                    // "After setting the ENABLE bit, a delay of two counter clock is needed before the LPTIM is
-                    // actually enabled."
-                    // The slowest LPTIM clock source is LSE at 32768 Hz, the fastest CPU clock is ~80 MHz. At
-                    // these conditions, one cycle of the LPTIM clock takes 2500 CPU cycles, so sleep for 5000.
-                    cortex_m::asm::delay(5000);
+                timer.cr1.write(|w| {
+                    w
+                        // Only interrupt on over/underflow (as well as input pulses)
+                        .urs()
+                        .set_bit()
+                        // Enable timer
+                        .cen()
+                        .set_bit()
+                });
 
-                    let mut self_ = Self {
-                        timer,
-                        _pins: PhantomData,
-                    };
+                // "After setting the ENABLE bit, a delay of two counter clock is needed before the LPTIM is
+                // actually enabled."
+                // The slowest LPTIM clock source is LSE at 32768 Hz, the fastest CPU clock is ~80 MHz. At
+                // these conditions, one cycle of the LPTIM clock takes 2500 CPU cycles, so sleep for 5000.
+                cortex_m::asm::delay(5000);
 
-                    self_.set_arr(arr);
+                let mut self_ = Self {
+                    timer,
+                    _pins: PhantomData,
+                };
 
-                    self_
-                }
+                self_.set_arr(arr);
 
-                /// Get the ARR (Auto Reload Register) value.
-                pub fn arr(&mut self) -> u16 {
-                    self.timer.arr.read().bits() as u16
-                }
+                self_
+            }
 
-                /// Set ARR (Auto Reload Register) value.
-                ///
-                /// ARR may only be set when timer is enabled.
-                pub fn set_arr(&mut self, arr: u16) {
-                    // This is only unsafe for some timers, so we need this to suppress the
-                    // warnings.
-                    #[allow(unused_unsafe)]
-                    self.timer.arr.write(|w| unsafe { w.arr().bits(arr) });
-                }
+            /// Get the ARR (Auto Reload Register) value.
+            pub fn arr(&mut self) -> u16 {
+                self.timer.arr.read().bits() as u16
+            }
 
-                /// Listen for over/underflow interrupts
-                pub fn listen(&mut self) {
-                    // Listen for over/underflow.
-                    self.timer.dier.write(|w| w.uie().enabled());
-                }
+            /// Set ARR (Auto Reload Register) value.
+            ///
+            /// ARR may only be set when timer is enabled.
+            pub fn set_arr(&mut self, arr: u16) {
+                // This is only unsafe for some timers, so we need this to suppress the
+                // warnings.
+                #[allow(unused_unsafe)]
+                self.timer.arr.write(|w| unsafe { w.arr().bits(arr) });
+            }
 
-                /// Listen for over/underflow interrupts, as well as IO triggers.
-                pub fn listen_all(&mut self) {
-                    // Listen for over/underflow.
-                    self.listen();
+            /// Listen for over/underflow interrupts
+            pub fn listen(&mut self) {
+                // Listen for over/underflow.
+                self.timer.dier.write(|w| w.uie().enabled());
+            }
 
-                    // Listen for counter change as well.
-                    self.timer.dier.write(|w| w.tie().enabled());
-                }
+            /// Listen for over/underflow interrupts, as well as IO triggers.
+            pub fn listen_all(&mut self) {
+                // Listen for over/underflow.
+                self.listen();
 
-                /// Get the current encoder status.
-                ///
-                /// Note that calling `clear_irq` before this method will clear the `did_overflow` flag.
-                pub fn status(&mut self) -> Status {
-                    // Up = 0, down = 1
-                    let is_dir_up = self.timer.cr1.read().dir().bit_is_clear();
+                // Listen for counter change as well.
+                self.timer.dier.write(|w| w.tie().enabled());
+            }
 
-                    // UIF is bit 0
-                    let did_overflow = self.timer.sr.read().bits() & 0x01 == 1;
+            /// Get the current encoder status.
+            ///
+            /// Note that calling `clear_irq` before this method will clear the `did_overflow` flag.
+            pub fn status(&mut self) -> Status {
+                // Up = 0, down = 1
+                let is_dir_up = self.timer.cr1.read().dir().bit_is_clear();
 
-                    let count = self.timer.cnt.read().bits() as u16;
+                // UIF is bit 0
+                let did_overflow = self.timer.sr.read().bits() & 0x01 == 1;
 
-                    let direction = match is_dir_up {
-                        true => Direction::Up,
-                        false => Direction::Down,
-                    };
+                let count = self.timer.cnt.read().bits() as u16;
 
-                    Status {
-                        direction,
-                        did_overflow,
-                        count,
-                    }
-                }
+                let direction = match is_dir_up {
+                    true => Direction::Up,
+                    false => Direction::Down,
+                };
 
-                /// Clear all interrupts
-                pub fn clear_irq(&mut self) {
-                    self.timer.sr.reset();
+                Status {
+                    direction,
+                    did_overflow,
+                    count,
                 }
             }
-        )+
-    }
+
+            /// Clear all interrupts
+            pub fn clear_irq(&mut self) {
+                self.timer.sr.reset();
+            }
+        }
+    };
 }
 
-encoders! {
-    TIM2: (tim2::smcr::SMS_A),
-    TIM21: (tim21::smcr::SMS_A),
+encoder! {
+    TIM2: (tim2::smcr::SMS_A)
+}
+
+#[cfg(not(feature = "stm32l0x0"))]
+encoder! {
+    TIM21: (tim21::smcr::SMS_A)
 }

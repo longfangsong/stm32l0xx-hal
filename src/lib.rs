@@ -2,7 +2,12 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::upper_case_acronyms)]
 
-#[cfg(not(any(feature = "stm32l0x1", feature = "stm32l0x2", feature = "stm32l0x3")))]
+#[cfg(not(any(
+    feature = "stm32l0x0",
+    feature = "stm32l0x1",
+    feature = "stm32l0x2",
+    feature = "stm32l0x3"
+)))]
 compile_error!(
     "This crate requires one of the following features enabled: stm32l0x1, stm32l0x2, stm32l0x3"
 );
@@ -19,6 +24,7 @@ pub use stm32l0::stm32l0x2 as pac;
 pub use stm32l0::stm32l0x3 as pac;
 
 pub mod adc;
+#[cfg(not(feature = "stm32l0x0"))]
 pub mod aes;
 pub mod calibration;
 pub mod crc;
