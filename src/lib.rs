@@ -9,6 +9,8 @@ compile_error!(
 
 use embedded_hal as hal;
 
+#[cfg(feature = "stm32l0x0")]
+pub use stm32l0::stm32l0x0 as pac;
 #[cfg(feature = "stm32l0x1")]
 pub use stm32l0::stm32l0x1 as pac;
 #[cfg(feature = "stm32l0x2")]
